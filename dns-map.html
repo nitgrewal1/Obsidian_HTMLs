@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DNS mental map</title>
+<style>
+:root{
+  --bg:#ffffff;--card:#f6f5f1;--text:#1f1e1c;--text2:#5d5b55;--border:#d9d7cf;--border2:#aaa79d;
+  --accent-bg:#e3eefb;--accent-fg:#0c447c;--accent-line:#378add;
+  --ok-bg:#e6f2d9;--ok-fg:#27500a;--warn-bg:#faeeda;--warn-fg:#633806;--neutral:#ecebe5;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1e1e1e;--card:#2a2a2a;--text:#e8e6df;--text2:#a8a69d;--border:#3d3d3a;--border2:#5f5e5a;
+  --accent-bg:#0c447c;--accent-fg:#cfe3f8;--accent-line:#85b7eb;
+  --ok-bg:#27500a;--ok-fg:#d7ecbd;--warn-bg:#633806;--warn-fg:#fad9a8;--neutral:#34342f;}}
+:root[data-theme="dark"]{
+  --bg:#1e1e1e;--card:#2a2a2a;--text:#e8e6df;--text2:#a8a69d;--border:#3d3d3a;--border2:#5f5e5a;
+  --accent-bg:#0c447c;--accent-fg:#cfe3f8;--accent-line:#85b7eb;
+  --ok-bg:#27500a;--ok-fg:#d7ecbd;--warn-bg:#633806;--warn-fg:#fad9a8;--neutral:#34342f;}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+.top{display:flex;justify-content:space-between;align-items:center;margin:0 0 14px}
+h1{font-size:18px;font-weight:500;margin:0}
+button{font:inherit;font-size:14px;color:var(--text);background:transparent;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{background:var(--card)}
+button:focus-visible{outline:2px solid var(--accent-line);outline-offset:2px}
+.h{font-size:13px;color:var(--text2);margin:18px 0 8px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.tabs button.on,.chips button.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-fg)}
+.step{display:flex;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;margin:0 0 8px;cursor:pointer;opacity:.45;transition:opacity .2s}
+.step.past{opacity:.75}
+.step.cur{opacity:1;background:var(--card);border-color:var(--accent-line)}
+.num{flex:none;width:26px;height:26px;border-radius:50%;background:var(--neutral);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500}
+.step.cur .num{background:var(--accent-bg);color:var(--accent-fg)}
+.ttl{font-size:15px;font-weight:500;margin:0 0 2px}
+.dsc{font-size:13px;color:var(--text2);margin:0;line-height:1.5}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tag{font-size:12px;padding:2px 8px;border-radius:6px}
+.t-rec{background:var(--accent-bg);color:var(--accent-fg)}
+.t-who{background:var(--ok-bg);color:var(--ok-fg)}
+.t-bad{background:var(--warn-bg);color:var(--warn-fg)}
+.t-none{background:var(--neutral);color:var(--text2)}
+.nav{display:flex;align-items:center;gap:8px;margin:6px 0 8px}
+.dots{flex:1;display:flex;gap:6px;justify-content:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--border2)}
+.dot.on{background:var(--accent-line)}
+.chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:8px;margin:0 0 12px}
+.chips button{font-weight:500}
+.panel{background:var(--card);border-radius:12px;padding:14px 16px}
+.panel table{width:100%;font-size:13px;border-collapse:collapse}
+.panel td{padding:5px 0;vertical-align:top}
+.panel td:first-child{color:var(--text2);width:110px}
+.panel code{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+@media (prefers-reduced-motion:reduce){.step{transition:none}}
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>DNS mental map</h1>
+  <button id="theme" aria-label="Toggle light or dark theme">Light / dark</button>
+</div>
+
+<p class="h">1. Pick a situation, then step through it</p>
+<div class="tabs" id="tabs"></div>
+<div id="steps"></div>
+<div class="nav">
+  <button onclick="go(-1)">&larr; Back</button>
+  <div class="dots" id="dots"></div>
+  <button onclick="go(1)">Next &rarr;</button>
+</div>
+
+<p class="h">2. Record cheat sheet: tap a record</p>
+<div class="chips" id="chips"></div>
+<div class="panel" id="panel"></div>
+
+<script>
+var S=[
+{n:"Open a website",s:[
+{t:"You type www.shopify.com",d:"Your browser only knows the name. It needs an IP address to connect to.",rec:"A",who:"Shopify (domain owner)"},
+{t:"Resolver asks around",d:"Your resolver or ISP server asks root, then .com, then Shopify's own nameserver, until it reaches the authoritative answer.",rec:"NS (the trail to follow)",who:"Each zone's owner"},
+{t:"Answer comes back",d:"The authoritative server replies: www.shopify.com is at some IP. Your computer caches it for a while.",rec:"A",who:"Shopify (domain owner)"},
+{t:"Browser connects to the IP",d:"Port 443 (HTTPS). The page loads. DNS is finished at this point.",rec:null,who:null}
+]},
+{n:"Send an email",s:[
+{t:"You send to support@shopify.com",d:"Your mail server splits the address at the @.",rec:null,who:null},
+{t:"Only the domain goes to DNS",d:"'support' is the mailbox, handled later by the receiving server. 'shopify.com' is looked up: who receives mail for it?",rec:"MX",who:"Shopify (domain owner)"},
+{t:"MX returns a server name",d:"For example mail.shopify.com with priority 10. It is a machine name, not a mailbox, so one more lookup is needed.",rec:"MX answer",who:"Shopify (domain owner)"},
+{t:"Turn that name into an IP",d:"Same as the website case: ask for the A record of mail.shopify.com.",rec:"A",who:"Shopify (domain owner)"},
+{t:"Connect and hand over the message",d:"Port 25 (SMTP). The server says 'message for support@shopify.com' and finds the support mailbox inside. No DNS involved here.",rec:null,who:null}
+]},
+{n:"Check an incoming email",s:[
+{t:"A server connects from an IP",d:"Say 198.51.100.7. This IP is real. It cannot be faked because replies must travel back to it.",rec:null,who:"The network itself"},
+{t:"It claims 'From: you@gmail.com'",d:"This is just typed text. Anyone can type anything here, so it proves nothing yet.",rec:null,who:"The sender (untrusted)",bad:true},
+{t:"Receiver asks the claimed domain",d:"It does NOT ask the IP who it is. It asks gmail.com's DNS: which IPs may send mail for you?",rec:"TXT (SPF)",who:"Google (domain owner)"},
+{t:"Compare IP against the list",d:"IP on the list: looks legitimate. Not on the list: ~all means suspicious, -all means reject. The attacker cannot edit Google's record.",rec:"TXT (SPF)",who:"Google (domain owner)"},
+{t:"Optional extra signal: PTR + A",d:"Reverse lookup the IP, then check the name points back to the same IP. Shows the IP belongs to a name, not that it may send for gmail.com.",rec:"PTR then A",who:"IP owner, then domain owner"}
+]}];
+var R={
+A:{q:"What IPv4 address does this name have?",w:"Owner of the domain",l:"The domain's zone",e:"www IN A 10.129.14.5",x:"Trust: strong for name to IP."},
+AAAA:{q:"What IPv6 address does this name have?",w:"Owner of the domain",l:"The domain's zone",e:"www IN AAAA 2001:db8::5",x:"Same as A, for IPv6."},
+MX:{q:"Which server receives mail for this domain?",w:"Owner of the domain",l:"The domain's zone",e:"IN MX 10 mail.shopify.com.",x:"Points to a machine name. Lower number is tried first."},
+NS:{q:"Which servers are in charge of this domain?",w:"Owner of the domain",l:"The domain's zone",e:"IN NS ns1.domain.com.",x:"Tells resolvers where the official answers live."},
+TXT:{q:"Free-form note: SPF, DKIM, DMARC, ownership codes",w:"Owner of the domain",l:"The domain's zone",e:"v=spf1 include:mailgun.org ~all",x:"Trust: strong, because only the owner can edit it. Public, so it also leaks vendor info."},
+CNAME:{q:"Is this name just an alias of another name?",w:"Owner of the domain",l:"The domain's zone",e:"www IN CNAME server2",x:"Follow it, then look up the target's A record."},
+PTR:{q:"What name does this IP say it has?",w:"Owner of the IP (ISP or host)",l:"The reverse zone (in-addr.arpa)",e:"5 IN PTR server1.domain.com.",x:"Trust: weak alone. Only believe it if the name's A record points back to the same IP."},
+SOA:{q:"Who administers this zone, and how often does it sync?",w:"Owner of the domain",l:"Start of the zone file",e:"hostmaster.domain.com. 2001062501 ...",x:"The first dot in the email is really an @."}
+};
+var cur=0,st=0;
+function tabs(){var h="";S.forEach(function(s,i){h+='<button class="'+(i==cur?'on':'')+'" onclick="pick('+i+')">'+s.n+'</button>'});document.getElementById('tabs').innerHTML=h}
+function draw(){
+ var s=S[cur].s,h="",d="";
+ s.forEach(function(p,i){
+  var c=i==st?'cur':(i<st?'past':'');
+  var tg=p.rec?'<span class="tag t-rec">DNS record: '+p.rec+'</span>':'<span class="tag t-none">No DNS lookup</span>';
+  if(p.who)tg+='<span class="tag '+(p.bad?'t-bad':'t-who')+'">Written by: '+p.who+'</span>';
+  h+='<div class="step '+c+'" onclick="st='+i+';draw()"><div class="num">'+(i+1)+'</div><div><p class="ttl">'+p.t+'</p><p class="dsc">'+p.d+'</p><div class="tags">'+tg+'</div></div></div>';
+  d+='<div class="dot '+(i==st?'on':'')+'"></div>';
+ });
+ document.getElementById('steps').innerHTML=h;document.getElementById('dots').innerHTML=d;
+}
+function pick(i){cur=i;st=0;tabs();draw()}
+function go(n){var m=S[cur].s.length;st=(st+n+m)%m;draw()}
+function rec(k){
+ var r=R[k],h="";
+ Object.keys(R).forEach(function(x){h+='<button class="'+(x==k?'on':'')+'" onclick="rec(\''+x+'\')">'+x+'</button>'});
+ document.getElementById('chips').innerHTML=h;
+ document.getElementById('panel').innerHTML='<table><tr><td>Answers</td><td>'+r.q+'</td></tr><tr><td>Written by</td><td>'+r.w+'</td></tr><tr><td>Lives in</td><td>'+r.l+'</td></tr><tr><td>Example</td><td><code>'+r.e+'</code></td></tr><tr><td>Remember</td><td>'+r.x+'</td></tr></table>';
+}
+document.getElementById('theme').onclick=function(){
+ var r=document.documentElement,dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;
+ r.dataset.theme=dark?'light':'dark';
+};
+tabs();draw();rec('A');
+</script>
+</body>
+</html>
